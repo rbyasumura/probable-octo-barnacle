@@ -66,7 +66,9 @@
     <Reference Include="System.EnterpriseServices" />
   </ItemGroup>
   <ItemGroup>
+    <Content Include="default - Copy %282%29.html" />
     <Content Include="default - Copy.html" />
+    <Content Include="galaxy_s5-wallpaper-800x600.jpg" />
     <Content Include="require.html" />
     <Content Include="default - Copy.js" />
     <Content Include="es6.html" />

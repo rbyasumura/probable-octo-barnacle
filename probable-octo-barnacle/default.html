@@ -3,77 +3,211 @@
 <head>
     <title></title>
     <meta charset="utf-8" />
+    <style>
+        canvas {
+            border: solid 1px #000000;
+            user-select: none;
+            -webkit-user-select: none;
+            -moz-user-select: none;
+        }
+    </style>
 </head>
 <body>
-    <button onclick="moveup()">UP</button>
-    <button onclick="movedown()">DOWN</button>
-    <button onclick="moveleft()">LEFT</button>
-    <button onclick="moveright()">RIGHT</button>
+    <div id="canvasContainer"></div>
+    <button onclick="play();">Play</button>
+    <button onclick="stop();">Stop</button>
+    <button onclick="reset();">Reset</button>
     <script>
-        var redGamePiece, blueGamePiece, yellowGamePiece;
+        var spare;
+        var isSpareReady = false;
 
-        function startGame() {
-            redGamePiece = new component(75, 75, "red", 10, 10);
-            yellowGamePiece = new component(75, 75, "yellow", 50, 60);
-            blueGamePiece = new component(75, 75, "blue", 10, 110);
-            myGameArea.start();
+        function getGaussian(mean, stdDev) {
+            if (isSpareReady) {
+                isSpareReady = false;
+                return spare * stdDev + mean;
+            } else {
+                var u, v, s = 0;
+                for (; s >= 1 || s == 0;) {
+                    u = Math.random() * 2 - 1;
+                    v = Math.random() * 2 - 1;
+                    s = u * u + v * v;
+                }
+                var mul = Math.sqrt(-2 * Math.log(s) / s);
+                spare = v * mul;
+                isSpareReady = true;
+                return mean + stdDev * u * mul;
+            }
+        }
+    </script>
+    <script>
+        var MAX_SPEED = 1 / 4;
+        var NUMBER_OF_ANIMALS = 1000;
+
+        var canvas = document.createElement("canvas");
+        canvas.width = 800;
+        canvas.height = 600;
+        document.getElementById("canvasContainer").appendChild(canvas);
+
+        var context = canvas.getContext("2d");
+
+        var lastTimestamp;
+        var animals = []
+        for (var i = 0; i < NUMBER_OF_ANIMALS; i++) {
+            animals.push(new animal(
+                Math.random() * canvas.width,
+                Math.random() * canvas.height,
+                "rgb(" + (Math.random() * 100) + "%, " + (Math.random() * 100) + "%, " + (Math.random() * 100) + "%)",
+                Math.random() * MAX_SPEED,
+                Math.random() * 2 * Math.PI));
         }
 
-        function component(width, height, color, x, y) {
-            this.width = width;
-            this.height = height;
-            this.speedX = 0;
-            this.speedY = 0;
+        var background = new Image();
+        background.src = "galaxy_s5-wallpaper-800x600.jpg";
+        var raf;
+
+        var mouse = {
+            x: 0,
+            y: 0,
+            isDown: false,
+        }
+        var pan = {
+            x: 0,
+            y: 0,
+            previousX: 0,
+            previousY: 0,
+        }
+        var scale = {
+            exponent: 0,
+            power: 1,
+            x: 0,
+            y: 0,
+        };
+
+        function animal(x, y, color, speed, direction) {
             this.x = x;
             this.y = y;
-            this.update = function () {
-                ctx = myGameArea.context;
-                ctx.fillStyle = color;
-                ctx.fillRect(this.x, this.y, this.width, this.height);
+            this.color = color;
+            this.speed = speed;
+            this.direction = direction;
+
+            this.pulse = function () {
+                this.move();
             };
-            this.newPos = function () {
-                this.x += this.speedX;
-                this.y += this.speedY;
+            this.move = function () {
+                var _x = this.x + this.speed * Math.cos(this.direction);
+                var _y = this.y + this.speed * Math.sin(this.direction);
+                if (0 > _x || _x > canvas.width) {
+                    this.direction = Math.PI - this.direction
+                    _x = this.x + this.speed * Math.cos(this.direction);
+                }
+                if (0 > _y || _y > canvas.height) {
+                    this.direction = -this.direction;
+                    _y = this.y + this.speed * Math.sin(this.direction);
+                }
+                this.x = _x;
+                this.y = _y;
+            };
+            this.draw = function () {
+                context.save();
+                context.beginPath();
+                context.arc(this.x, this.y, 1, 0, 2 * Math.PI);
+                context.fillStyle = this.color;
+                context.fill();
+                context.closePath();
+                context.restore();
             };
         }
 
-        function updateGameArea() {
-            myGameArea.clear();
-            myGamePiece.newPos();
-            myGamePiece.update();
+        function render(timestamp) {
+            context.save();
+            context.clearRect(0, 0, canvas.width, canvas.height);
+
+            context.translate(pan.x, pan.y);
+            context.translate((1 - scale.power) * scale.x, (1 - scale.power) * scale.y);
+            context.scale(scale.power, scale.power);
+            //context.drawImage(background, 0, 0, 640, 480);
+
+            for (var i = 0 ; i < animals.length; i++) {
+                animals[i].pulse();
+                animals[i].draw();
+            }
+
+            context.restore();
+
+            lastTimestamp = timestamp;
+
+            raf = window.requestAnimationFrame(render);
+        }
+        function stop() {
+            window.cancelAnimationFrame(raf);
+        }
+        function play() {
+            raf = window.requestAnimationFrame(render);
+        }
+        function calculateScale(delta) {
+            scale.exponent += delta / 10;
+            scale.exponent = Math.max(0, scale.exponent);
+            scale.power = Math.pow(2, scale.exponent);
+        }
+        function reset() {
+            scale.exponent = 0;
+            scale.power = 1;
+            scale.x = 0;
+            scale.y = 0;
+            pan.x = 0;
+            pan.y = 0;
+        }
+        function adjustPan() {
+            pan.x = Math.max(
+                (scale.power - 1) * (scale.x - canvas.width), Math.min(
+                pan.x,
+                (scale.power - 1) * scale.x));
+            pan.y = Math.max(
+                (scale.power - 1) * (scale.y - canvas.height), Math.min(
+                pan.y,
+                (scale.power - 1) * scale.y));
         }
 
-        function moveup() {
-            myGamePiece.speedY -= 1;
-        }
+        document.addEventListener("mousewheel", function (e) {
+            var e = window.event || e;
+            var delta = Math.max(-1, Math.min(1, (e.wheelDelta || -e.detail)));
 
-        function movedown() {
-            myGamePiece.speedY += 1;
-        }
+            if (delta > 0) {
+                if (e.target === canvas) {
+                    scale.x = (e.offsetX + (scale.power - 1) * scale.x) / scale.power;
+                    scale.y = (e.offsetY + (scale.power - 1) * scale.y) / scale.power;
+                }
+                calculateScale(delta);
+            }
+        }, false);
+        document.addEventListener("mousewheel", function (e) {
+            var e = window.event || e;
+            var delta = Math.max(-1, Math.min(1, (e.wheelDelta || -e.detail)));
 
-        function moveleft() {
-            myGamePiece.speedX -= 1;
-        }
+            if (delta < 0) {
+                calculateScale(delta);
+                adjustPan();
+            }
+        }, false);
+        canvas.addEventListener("mousedown", function (e) {
+            mouse.isDown = true;
+            mouse.x = e.x;
+            mouse.y = e.y;
+        }, false);
+        document.addEventListener("mousemove", function (e) {
+            if (mouse.isDown) {
+                pan.x = pan.previousX + e.x - mouse.x;
+                pan.y = pan.previousY + e.y - mouse.y;
+                adjustPan();
+            }
+        }, false);
+        document.addEventListener("mouseup", function (e) {
+            mouse.isDown = false;
+            pan.previousX = pan.x;
+            pan.previousY = pan.y;
+        }, false);
 
-        function moveright() {
-            myGamePiece.speedX += 1;
-        }
-
-        var myGameArea = {
-            canvas: document.createElement("canvas"),
-            start: function () {
-                this.canvas.width = 480;
-                this.canvas.height = 270;
-                this.context = this.canvas.getContext("2d");
-                document.body.insertBefore(this.canvas, document.body.childNodes[0]);
-                this.interval = setInterval(updateGameArea, 20);
-            },
-            clear: function () {
-                this.context.clearRect(0, 0, this.canvas.width, this.canvas.height);
-            },
-        }
-
-        startGame();
+        play();
     </script>
 </body>
 </html>
