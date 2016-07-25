@@ -1,0 +1,81 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+    <title></title>
+    <meta charset="utf-8" />
+    <style>
+        canvas {
+            border: solid 1px #000000;
+            user-select: none;
+            -webkit-user-select: none;
+            -moz-user-select: none;
+        }
+    </style>
+</head>
+<body>
+    <div style="float: left;">
+        <div id="canvasContainer"></div>
+        <button onclick="play();">Play</button>
+        <button onclick="stop();">Stop</button>
+        <button onclick="reset();">Reset</button>
+    </div>
+    <script>
+        var canvas = document.createElement("canvas");
+        canvas.width = 800;
+        canvas.height = 600;
+        document.getElementById("canvasContainer").appendChild(canvas);
+
+        var context = canvas.getContext("2d");
+
+        var background = new Image();
+        background.src = "galaxy_s5-wallpaper-800x600.jpg";
+        var raf;
+
+        //transform.dx = -400;
+        //transform.dx = 2 * transform.dx;
+        //transform.scale = 2;
+        //transform.dx += 200;
+        //transform.dx -= 400;
+        //transform.scale = 3;
+        //transform.dx *= 3 / 2;
+        //transform.dx += 400;
+        //transform.dx -= 400;
+        //transform.scale = 1;
+        //transform.dx *= 1 / 3;
+        //transform.dx += 400;
+
+        function render(timestamp) {
+            context.save();
+            context.clearRect(0, 0, canvas.width, canvas.height);
+
+            //context.translate(pan.x, pan.y);
+            //context.translate((1 - scale.power) * scale.x, (1 - scale.power) * scale.y);
+            //context.scale(scale.power, scale.power);
+            //context.translate(-400, 0);
+            context.transform(transform.scale, 0, 0, transform.scale, transform.dx, transform.dy);
+
+            context.drawImage(background, 0, 0, canvas.width, canvas.height);
+            context.restore();
+
+            lastTimestamp = timestamp;
+
+            raf = window.requestAnimationFrame(render);
+        }
+        function stop() {
+            window.cancelAnimationFrame(raf);
+        }
+        function play() {
+            raf = window.requestAnimationFrame(render);
+        }
+        function reset() {
+        }
+  
+        //setInterval(function () {
+        //    document.getElementById("current-population").innerHTML = animals.length;
+        //    document.getElementById("food").innerHTML = foods.length;
+        //}, 1000);
+
+        play();
+    </script>
+</body>
+</html>
