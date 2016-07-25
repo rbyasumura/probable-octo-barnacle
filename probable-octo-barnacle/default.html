@@ -13,10 +13,16 @@
     </style>
 </head>
 <body>
-    <div id="canvasContainer"></div>
-    <button onclick="play();">Play</button>
-    <button onclick="stop();">Stop</button>
-    <button onclick="reset();">Reset</button>
+    <div style="float: left;">
+        <div id="canvasContainer"></div>
+        <button onclick="play();">Play</button>
+        <button onclick="stop();">Stop</button>
+        <button onclick="reset();">Reset</button>
+    </div>
+    <div style="float:left; margin-left: 1em;">
+        Current Population: <span id="current-population"></span><br />
+        Food: <span id="food"></span>
+    </div>
     <script>
         var spare;
         var isSpareReady = false;
@@ -42,6 +48,12 @@
     <script>
         var MAX_SPEED = 1 / 4;
         var NUMBER_OF_ANIMALS = 1000;
+        var NUMBER_OF_FOODS = 1000;
+        var AGE_LIMIT = 10000;
+        var INITIAL_ENERGY = 2000;
+        var FOOD_ENERGY = 400;
+        var MATURITY_AGE = 2500;
+        var REPRODUCTION_RATE = 0.001;
 
         var canvas = document.createElement("canvas");
         canvas.width = 800;
@@ -57,8 +69,14 @@
                 Math.random() * canvas.width,
                 Math.random() * canvas.height,
                 "rgb(" + (Math.random() * 100) + "%, " + (Math.random() * 100) + "%, " + (Math.random() * 100) + "%)",
-                Math.random() * MAX_SPEED,
-                Math.random() * 2 * Math.PI));
+                getGaussian(MAX_SPEED, MAX_SPEED),
+                Math.random() * 2 * Math.PI,
+                1));
+        }
+
+        var foods = [];
+        for (var i = 0; i < NUMBER_OF_FOODS; i++) {
+            foods.push(new food(Math.random() * canvas.width, Math.random() * canvas.height));
         }
 
         var background = new Image();
@@ -83,15 +101,65 @@
             y: 0,
         };
 
-        function animal(x, y, color, speed, direction) {
+        function food(x, y) {
+            this.x = x;
+            this.y = y;
+
+            this.draw = function (context) {
+                context.save();
+                context.fillStyle = "green";
+                context.fillRect(this.x, this.y, 1, 1);
+                context.restore();
+            }
+        }
+        function animal(x, y, color, speed, direction, generation) {
             this.x = x;
             this.y = y;
             this.color = color;
             this.speed = speed;
             this.direction = direction;
+            this.age = 0;
+            this.ageLimit = AGE_LIMIT;
+            this.energy = INITIAL_ENERGY;
+            this.generation = generation;
 
             this.pulse = function () {
+                this.age++;
+                this.energy--;
+                if (this.age > this.ageLimit
+                    || this.energy <= 0) {
+                    this.die();
+                    return false;
+                }
+
                 this.move();
+                var i = foods.findIndex(function (element, index, array) {
+                    return Math.round(element.x) === Math.round(this.x)
+                        && Math.round(element.y) === Math.round(this.y);
+                }, this);
+                if (i > -1) {
+                    this.energy += FOOD_ENERGY;
+                    foods.splice(i, 1);
+                }
+
+                if (this.age > MATURITY_AGE
+                    && Math.random() < REPRODUCTION_RATE) {
+
+                    this.reproduce();
+                }
+
+                return true;
+            };
+            this.reproduce = function () {
+                animals.push(new animal(
+                    this.x,
+                    this.y,
+                    this.color,
+                    this.speed * getGaussian(1, this.speed),
+                    Math.random() * 2 * Math.PI,
+                    this.generation + 1));
+            }
+            this.die = function () {
             };
             this.move = function () {
                 var _x = this.x + this.speed * Math.cos(this.direction);
@@ -107,7 +175,7 @@
                 this.x = _x;
                 this.y = _y;
             };
-            this.draw = function () {
+            this.draw = function (context) {
                 context.save();
                 context.beginPath();
                 context.arc(this.x, this.y, 1, 0, 2 * Math.PI);
@@ -127,9 +195,24 @@
             context.scale(scale.power, scale.power);
             //context.drawImage(background, 0, 0, 640, 480);
 
-            for (var i = 0 ; i < animals.length; i++) {
-                animals[i].pulse();
-                animals[i].draw();
+            for (var i = 0; i < animals.length; i++) {
+                if (animals[i].pulse()) {
+                    animals[i].draw(context);
+                }
+                else {
+                    animals.splice(i, 1);
+                    i--;
+                }
+            }
+
+            /// Replenish food
+            for (var i = 0; i < 1; i++) {
+                if (Math.random() > 0.5) {
+                    foods.push(new food(Math.random() * canvas.width, Math.random() * canvas.height));
+                }
+            }
+            for (var i = 0; i < foods.length; i++) {
+                foods[i].draw(context);
             }
 
             context.restore();
@@ -166,6 +249,8 @@
                 (scale.power - 1) * (scale.y - canvas.height), Math.min(
                 pan.y,
                 (scale.power - 1) * scale.y));
+            scale.x;
+            scale.y;
         }
 
         document.addEventListener("mousewheel", function (e) {
@@ -193,6 +278,10 @@
             mouse.isDown = true;
             mouse.x = e.x;
             mouse.y = e.y;
+            pan.previousX = pan.x;
+            pan.previousY = pan.y;
+            scale.previousX = scale.x;
+            scale.previousY = scale.y;
         }, false);
         document.addEventListener("mousemove", function (e) {
             if (mouse.isDown) {
@@ -203,9 +292,12 @@
         }, false);
         document.addEventListener("mouseup", function (e) {
             mouse.isDown = false;
-            pan.previousX = pan.x;
-            pan.previousY = pan.y;
         }, false);
+
+        setInterval(function () {
+            document.getElementById("current-population").innerHTML = animals.length;
+            document.getElementById("food").innerHTML = foods.length;
+        }, 1000);
 
         play();
     </script>
