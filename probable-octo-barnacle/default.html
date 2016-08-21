@@ -21,9 +21,23 @@
     </div>
     <div style="float:left; margin-left: 1em;">
         Current Population: <span id="current-population"></span><br />
-        Food: <span id="food"></span>
+        Food: <span id="food"></span><br />
+        Avg. Speed: <span id="avg-speed"></span><br />
+        Avg. Reproduction Rate: <span id="avg-reproduction-rate"></span><br />
+        Avg. Mutation Rate: <span id="avg-mutation-rate"></span><br />
+        Avg. Generation: <span id="avg-generation"></span><br />
+        Avg. Children: <span id="avg-children"></span><br />
+        <hr />
+        Speed:  <span id="speed"></span><br />
+        Age:  <span id="age"></span><br />
+        Energy:   <span id="energy"></span><br />
+        Reproduction Rate:   <span id="reproduction-rate"></span><br />
+        Mutation Rate:   <span id="mutation-rate"></span><br />
+        Generation: <span id="generation"></span><br />
+        Children: <span id="children"></span><br />
     </div>
     <script src="gaussian.js"></script>
+    <script src="camera.js"></script>
     <script>
         var MAX_SPEED = 1 / 4;
         var NUMBER_OF_ANIMALS = 1000;
@@ -33,6 +47,7 @@
         var FOOD_ENERGY = 400;
         var MATURITY_AGE = 2500;
         var REPRODUCTION_RATE = 0.001;
+        var MUTATION_RATE = 0.001;
 
         var canvas = document.createElement("canvas");
         canvas.width = 800;
@@ -41,16 +56,27 @@
 
         var context = canvas.getContext("2d");
 
+        var camera = new camera(canvas);
+
         var lastTimestamp;
         var animals = []
+        var totalSpeed = 0;
+        var totalReproductionRate = NUMBER_OF_ANIMALS * REPRODUCTION_RATE;
+        var totalMutationRate = NUMBER_OF_ANIMALS * MUTATION_RATE;
+        var totalGeneration = NUMBER_OF_ANIMALS;
+        var totalChildren = 0;
         for (var i = 0; i < NUMBER_OF_ANIMALS; i++) {
+            var speed = Math.abs(getGaussian(MAX_SPEED, MAX_SPEED));
+            totalSpeed += speed;
             animals.push(new animal(
                 Math.random() * canvas.width,
                 Math.random() * canvas.height,
                 "rgb(" + (Math.random() * 100) + "%, " + (Math.random() * 100) + "%, " + (Math.random() * 100) + "%)",
-                getGaussian(MAX_SPEED, MAX_SPEED),
+                speed,
                 Math.random() * 2 * Math.PI,
-                1));
+                1,
+                REPRODUCTION_RATE,
+               MUTATION_RATE));
         }
 
         var foods = [];
@@ -73,7 +99,7 @@
                 context.restore();
             }
         }
-        function animal(x, y, color, speed, direction, generation) {
+        function animal(x, y, color, speed, direction, generation, reproductionRate, mutationRate) {
             this.x = x;
             this.y = y;
             this.color = color;
@@ -83,10 +109,13 @@
             this.ageLimit = AGE_LIMIT;
             this.energy = INITIAL_ENERGY;
             this.generation = generation;
+            this.children = [];
+            this.reproductionRate = reproductionRate;
+            this.mutationRate = mutationRate;
 
             this.pulse = function () {
                 this.age++;
-                this.energy--;
+                this.energy -= 1 + this.speed;
                 if (this.age > this.ageLimit
                     || this.energy <= 0) {
                     this.die();
@@ -100,11 +129,12 @@
                 }, this);
                 if (i > -1) {
                     this.energy += FOOD_ENERGY;
-                    foods.splice(i, 1);
+                    var x = foods.splice(i, 1);
+                    x = null;
                 }
 
                 if (this.age > MATURITY_AGE
-                    && Math.random() < REPRODUCTION_RATE) {
+                    && Math.random() < this.reproductionRate) {
 
                     this.reproduce();
                 }
@@ -112,15 +142,35 @@
                 return true;
             };
             this.reproduce = function () {
-                animals.push(new animal(
+                var speed = this.speed * getGaussian(1, this.mutationRate);
+                var reproductionRate = this.reproductionRate * getGaussian(1, this.mutationRate);
+                var mutationRate = this.mutationRate * getGaussian(1, this.mutationRate);
+
+                totalSpeed += speed;
+                totalReproductionRate += reproductionRate;
+                totalMutationRate += mutationRate;
+                totalGeneration += this.generation + 1;
+                totalChildren++;
+
+                var child = new animal(
                     this.x,
                     this.y,
                     this.color,
-                    this.speed * getGaussian(1, this.speed),
+                   speed,
                     Math.random() * 2 * Math.PI,
-                    this.generation + 1));
+                    this.generation + 1,
+                    reproductionRate,
+                    mutationRate);
+
+                animals.push(child);
+                this.children.push(child);
             }
             this.die = function () {
+                totalSpeed -= this.speed;
+                totalReproductionRate -= this.reproductionRate;
+                totalMutationRate -= this.mutationRate;
+                totalGeneration -= this.generation;
+                totalChildren -= this.children.length;
             };
             this.move = function () {
                 var _x = this.x + this.speed * Math.cos(this.direction);
@@ -151,14 +201,15 @@
             context.save();
             context.clearRect(0, 0, canvas.width, canvas.height);
 
-            context.transform(transform.scale, 0, 0, transform.scale, transform.dx, transform.dy);
+            context.transform(camera.transform.scale, 0, 0, camera.transform.scale, camera.getDX(), camera.getDY());
 
             for (var i = 0; i < animals.length; i++) {
                 if (animals[i].pulse()) {
                     animals[i].draw(context);
                 }
                 else {
-                    animals.splice(i, 1);
+                    var dead = animals.splice(i, 1);
+                    dead = null;
                     i--;
                 }
             }
@@ -202,10 +253,23 @@
         setInterval(function () {
             document.getElementById("current-population").innerHTML = animals.length;
             document.getElementById("food").innerHTML = foods.length;
+            document.getElementById("avg-speed").innerHTML = totalSpeed / animals.length;
+            document.getElementById("avg-reproduction-rate").innerHTML = totalReproductionRate / animals.length;
+            document.getElementById("avg-mutation-rate").innerHTML = totalMutationRate / animals.length;
+            document.getElementById("avg-generation").innerHTML = totalGeneration / animals.length;
+            document.getElementById("avg-children").innerHTML = totalChildren / animals.length;
+            if (camera.focus) {
+                document.getElementById("speed").innerHTML = camera.focus.speed;
+                document.getElementById("age").innerHTML = camera.focus.age;
+                document.getElementById("energy").innerHTML = camera.focus.energy;
+                document.getElementById("generation").innerHTML = camera.focus.generation;
+                document.getElementById("children").innerHTML = camera.focus.children.length;
+                document.getElementById("reproduction-rate").innerHTML = camera.focus.reproductionRate;
+                document.getElementById("mutation-rate").innerHTML = camera.focus.mutationRate;
+            }
         }, 1000);
 
         play();
     </script>
-    <script src="camera.js"></script>
 </body>
 </html>
